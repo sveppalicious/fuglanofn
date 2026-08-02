@@ -1,0 +1,49 @@
+@import "tailwindcss";
+
+:root {
+  --background: #fbfaf7;
+  --surface: #ffffff;
+  --foreground: #1a1a17;
+  --muted: #5f5c54;
+  --line: #e4e0d7;
+  --accent: #1d6b4a;
+  --accent-soft: #e7f1eb;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #12120f;
+    --surface: #1b1b17;
+    --foreground: #ecebe5;
+    --muted: #a29e93;
+    --line: #2e2d27;
+    --accent: #63b98d;
+    --accent-soft: #14251c;
+  }
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-surface: var(--surface);
+  --color-foreground: var(--foreground);
+  --color-muted: var(--muted);
+  --color-line: var(--line);
+  --color-accent: var(--accent);
+  --color-accent-soft: var(--accent-soft);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-geist-sans), system-ui, sans-serif;
+}
+
+/* The one place a focus ring must stay visible: this site is a lot of keyboard
+   navigation through long grids. */
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
