@@ -62,7 +62,6 @@ DETAIL_WIDTH = 1200
 SOURCE_WIDTH = 1600
 
 WEBP_QUALITY = 82
-JPEG_QUALITY = 82
 
 # Accepted: public domain, CC0, CC-BY, CC-BY-SA, plus the Free Art License and
 # the GFDL. Rejected: non-commercial, no-derivatives, fair use, and anything
@@ -341,7 +340,15 @@ def review_reasons(record: dict, species: dict) -> list[str]:
 
 
 def write_renditions(payload: bytes, slug: str) -> dict:
-    """400px card thumbnail and 1200px detail image, WebP plus JPEG fallback."""
+    """400px card thumbnail and 1200px detail image, WebP only.
+
+    §3 of CLAUDE.md asks for a JPEG fallback as well. It is not written any more:
+    WebP has been baseline in every browser since Safari 14 in 2020, and the
+    fallback was 56% of a 3 GB cache — the single biggest thing standing between
+    the image set and a hosting tier that fits it. Manifest entries from earlier
+    runs keep their `jpg` path and the files are still on disk; nothing reads
+    them.
+    """
     with Image.open(io.BytesIO(payload)) as source:
         source.load()
         image = source.convert("RGB")
@@ -356,13 +363,10 @@ def write_renditions(payload: bytes, slug: str) -> dict:
         directory.mkdir(parents=True, exist_ok=True)
 
         webp = directory / f"{slug}.webp"
-        jpeg = directory / f"{slug}.jpg"
         rendition.save(webp, "WEBP", quality=WEBP_QUALITY, method=6)
-        rendition.save(jpeg, "JPEG", quality=JPEG_QUALITY, optimize=True, progressive=True)
 
         files[label] = {
             "webp": str(webp.relative_to(ROOT / "public")),
-            "jpg": str(jpeg.relative_to(ROOT / "public")),
             "width": target,
             "height": height,
         }

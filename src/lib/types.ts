@@ -16,10 +16,16 @@ export type RawSpecies = {
   range: string;
 };
 
-/** One rendition of a cached Wikimedia image, as URLs the browser can request. */
+/**
+ * One rendition of a cached Wikimedia image, as URLs the browser can request.
+ *
+ * `jpg` is only present on manifest entries written before the JPEG fallback was
+ * dropped, and nothing reads it — see `write_renditions` in
+ * `scripts/fetch_images.py`.
+ */
 export type Rendition = {
   webp: string;
-  jpg: string;
+  jpg?: string;
   width: number;
   height: number;
 };

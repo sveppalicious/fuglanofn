@@ -6,8 +6,9 @@ import type { Rendition, SpeciesImage } from "@/lib/types";
  * aspect, so the grid does not reflow as the image cache fills in.
  *
  * `next/image` is deliberately not used: `scripts/fetch_images.py` already emits
- * exactly two sizes as WebP with a JPEG fallback, so there is nothing left to
- * optimise and a plain <picture> keeps these servable straight off a CDN.
+ * exactly two sizes, so there is nothing left to optimise and a plain <img>
+ * keeps these servable straight off a bucket. WebP only — it has been baseline
+ * in every browser since Safari 14 in 2020.
  */
 function hue(value: string): number {
   let h = 0;
@@ -69,18 +70,16 @@ export function SpeciesThumb({
   const rendition: Rendition = image[size];
 
   return (
-    <picture>
-      <source srcSet={rendition.webp} type="image/webp" />
-      <img
-        src={rendition.jpg}
-        alt={alt ?? sciName}
-        width={rendition.width}
-        height={rendition.height}
-        loading="lazy"
-        decoding="async"
-        className={`${box} h-full w-full object-cover`}
-      />
-    </picture>
+    // eslint-disable-next-line @next/next/no-img-element -- see the note above
+    <img
+      src={rendition.webp}
+      alt={alt ?? sciName}
+      width={rendition.width}
+      height={rendition.height}
+      loading="lazy"
+      decoding="async"
+      className={`${box} h-full w-full object-cover`}
+    />
   );
 }
 

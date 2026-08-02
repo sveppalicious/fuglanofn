@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 
 import { compareNames } from "./collate";
+import { imageBase, imagesAvailable } from "./config";
 import { slugify } from "./slug";
 import type {
   Counts,
@@ -49,7 +50,7 @@ type ManifestEntry = {
  */
 function loadImages(): Map<string, SpeciesImage> {
   const images = new Map<string, SpeciesImage>();
-  if (!fs.existsSync(IMAGES_PATH)) return images;
+  if (!imagesAvailable || !fs.existsSync(IMAGES_PATH)) return images;
 
   const manifest = JSON.parse(fs.readFileSync(IMAGES_PATH, "utf8")) as Record<
     string,
@@ -58,7 +59,7 @@ function loadImages(): Map<string, SpeciesImage> {
 
   for (const [sciName, entry] of Object.entries(manifest)) {
     if (entry.status !== "ok" || !entry.files?.thumb || !entry.files?.detail) continue;
-    const url = (p: string) => `/${p.replace(/^\/+/, "")}`;
+    const url = (p: string) => `${imageBase}/${p.replace(/^\/+/, "")}`;
     images.set(sciName, {
       thumb: { ...entry.files.thumb, webp: url(entry.files.thumb.webp), jpg: url(entry.files.thumb.jpg) },
       detail: { ...entry.files.detail, webp: url(entry.files.detail.webp), jpg: url(entry.files.detail.jpg) },
