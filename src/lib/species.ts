@@ -9,6 +9,7 @@ import type {
   FamilyNode,
   OrderNode,
   RawSpecies,
+  Rendition,
   Species,
   SpeciesImage,
 } from "./types";
@@ -29,14 +30,27 @@ const IMAGES_PATH = path.join(process.cwd(), "site-data", "images.json");
 
 let cache: Dataset | null = null;
 
-/** A manifest entry as `scripts/fetch_images.py` writes it. */
+/**
+ * A manifest entry as `scripts/fetch_images.py` writes it.
+ *
+ * Every field is optional because the manifest is data on disk, not a compiled
+ * artefact: entries written by older versions of the fetcher carry a `jpg` path
+ * that newer ones do not, and declaring anything here as required only buys a
+ * type error that cannot fire and a runtime crash that can.
+ */
+type ManifestRendition = {
+  webp?: string;
+  width?: number;
+  height?: number;
+};
+
 type ManifestEntry = {
-  status: string;
+  status?: string;
   license?: string;
   licenseUrl?: string;
   artist?: string;
   descriptionUrl?: string;
-  files?: Record<string, { webp: string; jpg: string; width: number; height: number }>;
+  files?: Record<string, ManifestRendition | undefined>;
 };
 
 /**
@@ -57,12 +71,27 @@ function loadImages(): Map<string, SpeciesImage> {
     ManifestEntry
   >;
 
+  const manifestRendition = (
+    r: ManifestRendition | undefined,
+  ): Rendition | undefined => {
+    if (!r?.webp || !r.width || !r.height) return undefined;
+    return {
+      webp: `${imageBase}/${r.webp.replace(/^\/+/, "")}`,
+      width: r.width,
+      height: r.height,
+    };
+  };
+
   for (const [sciName, entry] of Object.entries(manifest)) {
-    if (entry.status !== "ok" || !entry.files?.thumb || !entry.files?.detail) continue;
-    const url = (p: string) => `${imageBase}/${p.replace(/^\/+/, "")}`;
+    if (entry.status !== "ok") continue;
+
+    const thumb = manifestRendition(entry.files?.thumb);
+    const detail = manifestRendition(entry.files?.detail);
+    if (!thumb || !detail) continue;
+
     images.set(sciName, {
-      thumb: { ...entry.files.thumb, webp: url(entry.files.thumb.webp), jpg: url(entry.files.thumb.jpg) },
-      detail: { ...entry.files.detail, webp: url(entry.files.detail.webp), jpg: url(entry.files.detail.jpg) },
+      thumb,
+      detail,
       license: entry.license ?? "",
       licenseUrl: entry.licenseUrl ?? "",
       artist: entry.artist ?? "",

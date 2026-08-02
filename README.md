@@ -122,13 +122,35 @@ runs `.github/workflows/deploy.yml`: typecheck, lint, tests, static export,
 Pages deploy.
 
 The site and its images are hosted separately, because they have to be. Pages
-enforces a hard **1 GB published-site limit**, and the export is 350 MB of HTML
-against an image cache of 1,2 GB across 21.000 files. So:
+enforces a hard **1 GB published-site limit** and the export does not leave room
+for both:
+
+| | apparent size |
+|---|---|
+| RSC prefetch payloads (`.txt`, 80.000 files) | 527 MB |
+| HTML (11.436 pages) | 312 MB |
+| **Site subtotal** | **840 MB** |
+| Species images (21.476 WebP) | 445 MB |
+| **Total** | **1,28 GB** — over the limit |
+
+The site alone is already at 84% of the ceiling, and the largest single item is
+not anything this project wrote: Next emits eight per-segment RSC prefetch files
+for every route, two of them byte-identical, and 11.436 routes turns that into
+half a gigabyte. There is no config gate for it in Next 16.2 —
+`collectSegmentData` runs unconditionally when generating static flight data.
+
+Deleting those files post-build does get the total to 932 MB, and the site still
+renders and navigates. Do not do it. The client router then requests them
+anyway, so every link in the viewport fires a 404, and Pages answers each 404 by
+serving the whole of `404.html` — trading 350 MB of storage for megabytes of
+wasted bandwidth on every page view.
+
+Hence the split:
 
 | | where | how big |
 |---|---|---|
-| HTML, CSS, JS | GitHub Pages | ~370 MB |
-| Species images | Cloudflare R2 | ~1,2 GB |
+| HTML, CSS, JS | GitHub Pages | ~840 MB |
+| Species images | Cloudflare R2 | ~445 MB |
 
 `src/lib/config.ts` resolves both origins from environment variables at build
 time:
@@ -148,6 +170,28 @@ gigabytes out of `public/` into `out/`.
 That is on purpose — a static export does not carry the image cache, so without
 an explicit origin the manifest is ignored entirely rather than emitting
 thousands of broken `<img>` tags.
+
+⚠️ A static export copies **all** of `public/`, whether or not any page
+references it. So a local export with the image cache present is 1,25 GB even
+with images disabled. CI stays under the limit only because
+`public/images/species/` is gitignored and therefore absent from the checkout.
+Do not commit it.
+
+### Image sizes and the masters
+
+`scripts/resize_images.py` cuts the renditions to the sizes the site displays:
+360px thumbnails and 600px detail images, down from 400px and 1200px. That took
+the WebP cache from 1,2 GB to 445 MB. The 1200px detail rendition was roughly
+3,5× the ~340px column it renders in, so almost all of that was waste.
+
+It re-encodes from `image-masters/detail/*.jpg` — the full-size JPEGs the
+fetcher used to write, moved out of `public/` so a static export cannot pick
+them up. Sourcing from the masters rather than the WebP keeps the script
+idempotent: running it twice cannot downscale an already-downscaled file.
+
+**Keep `image-masters/`.** It is 1,7 GB, gitignored, and the only remaining
+full-size copy. Without it, changing the rendition sizes means another
+multi-hour fetch against Wikimedia.
 
 ### Setting up the bucket
 

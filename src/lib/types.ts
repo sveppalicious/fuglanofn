@@ -17,15 +17,14 @@ export type RawSpecies = {
 };
 
 /**
- * One rendition of a cached Wikimedia image, as URLs the browser can request.
+ * One rendition of a cached Wikimedia image, as a URL the browser can request.
  *
- * `jpg` is only present on manifest entries written before the JPEG fallback was
- * dropped, and nothing reads it — see `write_renditions` in
- * `scripts/fetch_images.py`.
+ * WebP only. Older manifest entries also carry a `jpg` path from when a fallback
+ * was written; it is dropped on the way in, because nothing reads it and the
+ * files are no longer deployed.
  */
 export type Rendition = {
   webp: string;
-  jpg?: string;
   width: number;
   height: number;
 };

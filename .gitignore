@@ -1,9 +1,12 @@
 # See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
 
-# Cached Wikimedia images. A full run is roughly 2,8 GB, and it is reproducible
-# from site-data/images.json — which IS committed, and is the part that matters.
-# Production serves these from a CDN, not from the repo.
+# Cached Wikimedia images, and the full-size JPEG masters they are derived from.
+# Reproducible from site-data/images.json, which IS committed and is the part
+# that matters. The masters exist so the renditions can be re-cut at different
+# sizes without another multi-hour fetch against Wikimedia — keep them, but they
+# are far too large to track.
 /public/images/species/
+/image-masters/
 
 # fetch_images.py run log and bytecode
 /fetch-images.log
