@@ -115,6 +115,51 @@ rejection. Nothing substitutes for looking: in the 50-species sample one entry
 was a perfectly licensed photograph in which the bird is a speck in the grass,
 and no metadata could have told us that.
 
+## Deployment
+
+Live at **https://sveppalicious.github.io/fuglanofn/**. Every push to `main`
+runs `.github/workflows/deploy.yml`: typecheck, lint, tests, static export,
+Pages deploy.
+
+The site and its images are hosted separately, because they have to be. Pages
+enforces a hard **1 GB published-site limit**, and the export is 350 MB of HTML
+against an image cache of 1,2 GB across 21.000 files. So:
+
+| | where | how big |
+|---|---|---|
+| HTML, CSS, JS | GitHub Pages | ~370 MB |
+| Species images | Cloudflare R2 | ~1,2 GB |
+
+`src/lib/config.ts` resolves both origins from environment variables at build
+time:
+
+| variable | value | set where |
+|---|---|---|
+| `NEXT_PUBLIC_BASE_PATH` | `/fuglanofn` | the workflow |
+| `NEXT_PUBLIC_IMAGE_BASE` | the R2 public URL | `gh variable set IMAGE_BASE` |
+
+Neither is set in development, which is deliberate: `next dev` serves the images
+straight out of `public/`, so a local fetch run shows up immediately with no
+bucket involved. `output: "export"` likewise only switches on when
+`NEXT_PUBLIC_BASE_PATH` is present, so a local `npm run build` does not copy
+gigabytes out of `public/` into `out/`.
+
+**Until `IMAGE_BASE` is set the site deploys with placeholders on every card.**
+That is on purpose — a static export does not carry the image cache, so without
+an explicit origin the manifest is ignored entirely rather than emitting
+thousands of broken `<img>` tags.
+
+### Setting up the bucket
+
+1. Create an R2 bucket in the Cloudflare dashboard and enable public access.
+2. Configure `rclone` — see the notes at the top of `scripts/upload_images.sh`.
+3. `scripts/upload_images.sh` — syncs WebP only, ~21.000 files.
+4. `gh variable set IMAGE_BASE --body "https://pub-….r2.dev"` and re-run the
+   workflow.
+
+R2's free tier is 10 GB with no egress charges, which is the reason to prefer it
+over anything that bills for bandwidth on a public gallery.
+
 ## Next
 
 Per §9 of the brief: wire the manifest into `SpeciesThumb` and the detail page
