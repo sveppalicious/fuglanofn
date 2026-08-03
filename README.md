@@ -197,9 +197,17 @@ multi-hour fetch against Wikimedia.
 
 1. Create an R2 bucket in the Cloudflare dashboard and enable public access.
 2. Configure `rclone` — see the notes at the top of `scripts/upload_images.sh`.
+   Set the values one at a time rather than as one long line, and set
+   `no_check_bucket true`, which a bucket-scoped token requires.
 3. `scripts/upload_images.sh` — syncs WebP only, ~21.000 files.
 4. `gh variable set IMAGE_BASE --body "https://pub-….r2.dev"` and re-run the
    workflow.
+
+Two errors worth not repeating, both hit on the first attempt:
+`rclone lsd r2:` is not a valid check — listing buckets is an account-level
+operation, so a correctly scoped token gets 403 for it. Use
+`rclone size r2:<bucket>`. And without `no_check_bucket`, rclone tries to
+create the bucket before uploading, which the same token also cannot do.
 
 R2's free tier is 10 GB with no egress charges, which is the reason to prefer it
 over anything that bills for bandwidth on a public gallery.

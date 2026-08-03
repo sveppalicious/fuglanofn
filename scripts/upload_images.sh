@@ -16,18 +16,33 @@
 # --------------
 #   1. Create an R2 bucket in the Cloudflare dashboard (e.g. `fuglanofn-images`)
 #      and enable public access. Note the public URL, `https://pub-….r2.dev`.
-#   2. Create an R2 API token with Object Read & Write.
+#   2. Create an R2 API token with Object Read & Write, scoped to that bucket.
 #   3. Configure rclone — it handles tens of thousands of small files far better
-#      than the AWS CLI:
+#      than the AWS CLI. Set the values one at a time; a single long line is
+#      easy to truncate on paste, and a half-written remote fails later with a
+#      misleading "secret_access_key not found".
 #
-#        rclone config create r2 s3 \
-#          provider=Cloudflare \
-#          access_key_id=<ACCESS_KEY> \
-#          secret_access_key=<SECRET> \
-#          endpoint=https://<ACCOUNT_ID>.r2.cloudflarestorage.com \
-#          acl=private
+#        rclone config create r2 s3 provider=Cloudflare
+#        rclone config update r2 endpoint https://<ACCOUNT_ID>.r2.cloudflarestorage.com
+#        rclone config update r2 access_key_id <ACCESS_KEY>
 #
-#   4. Point the site at the bucket, so CI builds with the right image origin:
+#      Keep the secret out of shell history:
+#
+#        printf 'R2 secret: '; read -rs S; echo; rclone config update r2 secret_access_key "$S"; unset S
+#
+#      Required for a bucket-scoped token. Without it rclone tries to create the
+#      bucket before every upload and the token cannot, so writes fail with
+#      "CreateBucket … AccessDenied":
+#
+#        rclone config update r2 no_check_bucket true
+#
+#   4. Check it. Note that `rclone lsd r2:` is the WRONG test — listing buckets
+#      is an account-level operation and a bucket-scoped token gets 403 for it,
+#      correctly. Look inside the bucket instead:
+#
+#        rclone size r2:fuglanofn-images
+#
+#   5. Point the site at the bucket, so CI builds with the right image origin:
 #
 #        gh variable set IMAGE_BASE --body "https://pub-….r2.dev"
 #
