@@ -158,7 +158,12 @@ time:
 | variable | value | set where |
 |---|---|---|
 | `NEXT_PUBLIC_BASE_PATH` | `/fuglanofn` | the workflow |
-| `NEXT_PUBLIC_IMAGE_BASE` | the R2 public URL | `gh variable set IMAGE_BASE` |
+| `NEXT_PUBLIC_IMAGE_BASE` | `https://pub-1ad2e45445fb4fa2a9357f1a245a98de.r2.dev` | repo variable `IMAGE_BASE` |
+
+The bucket is live and holds all 21.476 renditions. Note the `r2.dev` origin is
+Cloudflare's development subdomain and is rate limited — fine for now, but the
+fix if the gallery ever starts throttling is a custom domain, which is a change
+to `IMAGE_BASE` and nothing else.
 
 Neither is set in development, which is deliberate: `next dev` serves the images
 straight out of `public/`, so a local fetch run shows up immediately with no
