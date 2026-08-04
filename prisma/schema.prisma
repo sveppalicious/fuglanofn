@@ -1,0 +1,205 @@
+// Fuglanöfn — see §6 and §8 of CLAUDE.md.
+//
+// Division of responsibility, worth understanding before adding a field here:
+//
+//   site-data/species.json owns the taxonomy. Order, family, English name,
+//   authority, IUCN category, range text, images. It is read-mostly reference
+//   data that changes once a year when AviList publishes, it renders without a
+//   database round-trip, and duplicating it here would mean two sources of truth
+//   for the same facts.
+//
+//   This database owns what people do. Users, suggestions, votes, comments —
+//   and the answer to "what is this bird called in Icelandic", which starts as
+//   the name AviList already carried and may later become one this site
+//   accepted.
+//
+// So Species below is deliberately thin: identity, plus the naming outcome. It
+// exists so suggestions have something to point at with a real foreign key, and
+// so "which families have the most proposals" is one query rather than a join
+// against a JSON file.
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+// Prisma 7 no longer takes `url` here. The connection string lives in
+// prisma.config.ts for the CLI, and reaches the client through a driver adapter
+// — see src/lib/db.ts.
+datasource db {
+  provider = "postgresql"
+}
+
+// ---------------------------------------------------------------------------
+// Auth.js (NextAuth v5) — prescribed by @auth/prisma-adapter
+// ---------------------------------------------------------------------------
+
+enum Role {
+  MEMBER
+  MODERATOR
+}
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String    @unique
+  emailVerified DateTime?
+  image         String?
+
+  // Votes are advisory; only a moderator can accept a name. §6.
+  role      Role     @default(MEMBER)
+  createdAt DateTime @default(now())
+
+  accounts    Account[]
+  sessions    Session[]
+  suggestions Suggestion[]
+  votes       Vote[]
+  comments    Comment[]
+}
+
+model Account {
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([provider, providerAccountId])
+}
+
+model Session {
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String
+  expires    DateTime
+
+  @@id([identifier, token])
+}
+
+// ---------------------------------------------------------------------------
+// Domain
+// ---------------------------------------------------------------------------
+
+model Species {
+  id      Int    @id @default(autoincrement())
+  sciName String @unique
+  /// Matches slugify() in src/lib/slug.ts — how the site addresses a species.
+  slug    String @unique
+
+  /// The current Icelandic name, or null if the species still needs one.
+  acceptedName String?
+
+  /// True when acceptedName came from AviList rather than from this site. The
+  /// 2.729 seeded names are established usage and the work of Icelandic
+  /// ornithologists over decades — the UI marks them differently, and the
+  /// moderation flow should not replace one without deliberate action.
+  seededName Boolean @default(false)
+
+  suggestions Suggestion[]
+
+  @@index([acceptedName])
+}
+
+enum Gender {
+  KK // karlkyn — masculine
+  KVK // kvenkyn — feminine
+  HK // hvorugkyn — neuter
+}
+
+enum SuggestionStatus {
+  DRAFT
+  SUBMITTED
+  UNDER_DISCUSSION
+  ACCEPTED
+  REJECTED
+  WITHDRAWN
+}
+
+model Suggestion {
+  id        Int    @id @default(autoincrement())
+  speciesId Int
+  name      String
+
+  /// Icelandic bird names are declinable nouns with a clear gender, so a
+  /// proposal without these is not yet a name. §5.
+  gender   Gender
+  genitive String?
+  plural   String?
+
+  /// Required, minimum 30 characters, enforced in the form and again in the
+  /// server action. The valuable part of a proposal: a name nobody can explain
+  /// is a name nobody adopts.
+  rationale String
+
+  status    SuggestionStatus @default(SUBMITTED)
+  authorId  String
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+
+  species  Species   @relation(fields: [speciesId], references: [id], onDelete: Cascade)
+  author   User      @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  votes    Vote[]
+  comments Comment[]
+  flags    Flag[]
+
+  /// The same name may not be proposed twice for one species. Nothing here is
+  /// ever deleted — once a name is accepted the alternatives are the record of
+  /// how it was chosen.
+  @@unique([speciesId, name])
+  @@index([speciesId, status])
+  @@index([createdAt])
+}
+
+model Vote {
+  id           Int      @id @default(autoincrement())
+  suggestionId Int
+  userId       String
+  createdAt    DateTime @default(now())
+
+  suggestion Suggestion @relation(fields: [suggestionId], references: [id], onDelete: Cascade)
+  user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  /// One vote per person per suggestion. §6.
+  @@unique([suggestionId, userId])
+}
+
+model Comment {
+  id           Int      @id @default(autoincrement())
+  suggestionId Int
+  authorId     String
+  body         String
+  createdAt    DateTime @default(now())
+
+  suggestion Suggestion @relation(fields: [suggestionId], references: [id], onDelete: Cascade)
+  author     User       @relation(fields: [authorId], references: [id], onDelete: Cascade)
+
+  @@index([suggestionId, createdAt])
+}
+
+model Flag {
+  id           Int       @id @default(autoincrement())
+  suggestionId Int
+  reporterId   String
+  reason       String
+  resolvedAt   DateTime?
+  createdAt    DateTime  @default(now())
+
+  suggestion Suggestion @relation(fields: [suggestionId], references: [id], onDelete: Cascade)
+
+  @@index([resolvedAt])
+}
