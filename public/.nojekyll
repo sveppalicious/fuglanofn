@@ -1,4 +1,0 @@
-Stops GitHub Pages running the output through Jekyll, which would discard the
-_next/ directory because it starts with an underscore. The Actions deploy path
-does not run Jekyll anyway; this is insurance against ever switching to the
-branch-based one.

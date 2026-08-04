@@ -9,18 +9,19 @@ it records the data quirks that will otherwise bite.
 
 ## Where this is
 
-Phase 2 of the build order in §9 — static taxonomy browse. No database, no auth,
-no images yet.
+Steps 1–3 of the build order in §9 are done: taxonomy browse, and images fetched
+and served. No database and no auth yet — step 4 is next, and the move to Vercel
+was the groundwork for it.
 
 - Landing page with overall progress
 - `/orders` → `/orders/:order` → `/families/:family` → `/species/:sciName`
-- Card grid with status badge, IUCN category, text search, status and IUCN
-  filters, and four sorts
+- Card grid with photograph, status badge, IUCN category, text search, status
+  and IUCN filters, and four sorts
 - Icelandic-first UI throughout
 
-Everything is statically generated from `site-data/species.json` at build time:
-11.436 pages (11.131 species, 252 families, 46 orders, plus the flat pages) in
-about 20 seconds.
+Orders and families are prerendered from `site-data/species.json`; species pages
+render on demand and are cached. See [Why not GitHub Pages](#why-not-github-pages)
+for why it is not the other way round.
 
 ## Running it
 
@@ -31,7 +32,7 @@ npm run dev
 | Command | What it does |
 |---|---|
 | `npm run dev` | Dev server on :3000 |
-| `npm run build` | Static generation of every taxonomy page |
+| `npm run build` | Production build |
 | `npm test` | Collation and formatting tests |
 | `npm run typecheck` | `tsc --noEmit` |
 | `npm run lint` | ESLint |
@@ -59,9 +60,9 @@ there is one source of truth and the array order stays the taxonomic sequence.
 ## Images
 
 `scripts/fetch_images.py` resolves each species against the English Wikipedia,
-takes the lead image, checks its Commons licence, and caches a 400px thumbnail
-and a 1200px detail image as WebP plus a JPEG fallback. Needs Pillow; everything
-else is standard library.
+takes the lead image, checks its Commons licence, and caches a 360px thumbnail
+and a 600px detail image as WebP. Needs Pillow; everything else is standard
+library.
 
 ```bash
 export FUGLANOFN_CONTACT="you@example.com"
@@ -71,7 +72,8 @@ python3 scripts/fetch_images.py --reflag      # redo review flags, no network
 ```
 
 The manifest at `site-data/images.json` is committed; the images themselves are
-not — a full run is about 2,8 GB and reproducible from the manifest.
+not — 445 MB across 21.476 files, reproducible from the manifest, and served
+from R2 rather than the repo.
 
 `src/lib/species.ts` merges the manifest into each species record as an optional
 `image`, so a partial manifest is the normal state and every consumer treats the
@@ -117,70 +119,45 @@ and no metadata could have told us that.
 
 ## Deployment
 
-Live at **https://sveppalicious.github.io/fuglanofn/**. Every push to `main`
-runs `.github/workflows/deploy.yml`: typecheck, lint, tests, static export,
-Pages deploy.
+Runs on **Vercel** on a Node runtime — the brief's §7 stack. Images are served
+from a **Cloudflare R2** bucket, which is independent of what runs the app.
 
-The site and its images are hosted separately, because they have to be. Pages
-enforces a hard **1 GB published-site limit** and the export does not leave room
-for both:
-
-| | apparent size |
+| variable | value |
 |---|---|
-| RSC prefetch payloads (`.txt`, 80.000 files) | 527 MB |
-| HTML (11.436 pages) | 312 MB |
-| **Site subtotal** | **840 MB** |
-| Species images (21.476 WebP) | 445 MB |
-| **Total** | **1,28 GB** — over the limit |
+| `NEXT_PUBLIC_IMAGE_BASE` | `https://pub-1ad2e45445fb4fa2a9357f1a245a98de.r2.dev` |
 
-The site alone is already at 84% of the ceiling, and the largest single item is
-not anything this project wrote: Next emits eight per-segment RSC prefetch files
-for every route, two of them byte-identical, and 11.436 routes turns that into
-half a gigabyte. There is no config gate for it in Next 16.2 —
-`collectSegmentData` runs unconditionally when generating static flight data.
+Leave it unset in development and the images come out of `public/images/species/`,
+so a local fetch run is visible with no bucket involved. In production an unset
+value means every card falls back to its placeholder — the cache is gitignored
+and never in the repo, so rendering placeholders beats thousands of broken
+`<img>` tags.
 
-Deleting those files post-build does get the total to 932 MB, and the site still
-renders and navigates. Do not do it. The client router then requests them
-anyway, so every link in the viewport fires a 404, and Pages answers each 404 by
-serving the whole of `404.html` — trading 350 MB of storage for megabytes of
-wasted bandwidth on every page view.
+The `r2.dev` origin is Cloudflare's development subdomain and is rate limited.
+If the gallery starts throttling, the fix is a custom domain, which is a change
+to `NEXT_PUBLIC_IMAGE_BASE` and nothing else.
 
-Hence the split:
+### Why not GitHub Pages
 
-| | where | how big |
-|---|---|---|
-| HTML, CSS, JS | GitHub Pages | ~840 MB |
-| Species images | Cloudflare R2 | ~445 MB |
+It was on Pages, and the move was not only about needing a database.
 
-`src/lib/config.ts` resolves both origins from environment variables at build
-time:
+Prerendering all 11.131 species pages cost **68 KB per page to deliver about
+1,4 KB of text unique to the bird** — the React tree serialised four or five
+times over: as HTML, as an inlined RSC payload for hydration, as a standalone
+payload for client navigation, as a byte-identical duplicate of that, and again
+sliced into per-segment prefetch files. That came to 759 MB, and with families
+and orders the export was 840 MB before a single photograph, against a hard 1 GB
+Pages limit.
 
-| variable | value | set where |
-|---|---|---|
-| `NEXT_PUBLIC_BASE_PATH` | `/fuglanofn` | the workflow |
-| `NEXT_PUBLIC_IMAGE_BASE` | `https://pub-1ad2e45445fb4fa2a9357f1a245a98de.r2.dev` | repo variable `IMAGE_BASE` |
+On a server runtime none of that is necessary. `generateStaticParams` for
+species returns an empty array: orders and families stay prerendered (298 pages,
+and the ones people arrive on) while species pages render on first request and
+are cached. Build time went from 44 s to about 10 s and the 840 MB stopped
+existing.
 
-The bucket is live and holds all 21.476 renditions. Note the `r2.dev` origin is
-Cloudflare's development subdomain and is rate limited — fine for now, but the
-fix if the gallery ever starts throttling is a custom domain, which is a change
-to `IMAGE_BASE` and nothing else.
-
-Neither is set in development, which is deliberate: `next dev` serves the images
-straight out of `public/`, so a local fetch run shows up immediately with no
-bucket involved. `output: "export"` likewise only switches on when
-`NEXT_PUBLIC_BASE_PATH` is present, so a local `npm run build` does not copy
-gigabytes out of `public/` into `out/`.
-
-**Until `IMAGE_BASE` is set the site deploys with placeholders on every card.**
-That is on purpose — a static export does not carry the image cache, so without
-an explicit origin the manifest is ignored entirely rather than emitting
-thousands of broken `<img>` tags.
-
-⚠️ A static export copies **all** of `public/`, whether or not any page
-references it. So a local export with the image cache present is 1,25 GB even
-with images disabled. CI stays under the limit only because
-`public/images/species/` is gitignored and therefore absent from the checkout.
-Do not commit it.
+Do not reintroduce a filesystem check for the image cache in server code. An
+`fs.existsSync` on `public/images/species` makes the bundler trace the directory
+and pull all 21.476 files into the server bundle as dependencies —
+`src/lib/config.ts` decides on environment instead, for that reason.
 
 ### Image sizes and the masters
 

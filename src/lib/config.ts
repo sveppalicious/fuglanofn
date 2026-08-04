@@ -1,36 +1,34 @@
 /**
- * Deployment-dependent URLs, resolved at build time.
+ * Where the cached Wikimedia images are served from.
  *
- * The site is a static export served from a subpath on GitHub Pages, while the
- * cached Wikimedia images live in a Cloudflare R2 bucket — Pages has a hard 1 GB
- * published-site limit and the image cache alone would blow through it.
+ * Set `NEXT_PUBLIC_IMAGE_BASE` to the R2 bucket origin in any deployed
+ * environment. Leave it unset locally and the images are served out of
+ * `public/images/species/`, so a local fetch run shows up immediately with no
+ * bucket involved.
  *
- * `NEXT_PUBLIC_` is required on both: these are read while rendering, and family
- * pages ship species data (image URLs included) to the client.
+ * `NEXT_PUBLIC_` is required: family pages ship species data, image URLs
+ * included, to the client.
  */
+export const imageBase = (process.env.NEXT_PUBLIC_IMAGE_BASE ?? "").replace(
+  /\/$/,
+  "",
+);
 
-/** Subpath the site is served from. Empty in dev, `/fuglanofn` on Pages. */
-export const basePath = (process.env.NEXT_PUBLIC_BASE_PATH ?? "").replace(/\/$/, "");
-
-/** Explicit image origin, e.g. an R2 bucket. Empty when none is configured. */
-const configuredImageBase = (process.env.NEXT_PUBLIC_IMAGE_BASE ?? "").replace(/\/$/, "");
+/** True when an explicit origin is configured, rather than the local cache. */
+export const usingRemoteImages = imageBase !== "";
 
 /**
- * Whether cached images can actually be served.
+ * Whether to attach cached images to species at all.
  *
- * Locally they can: `next dev` serves `public/images/species/…` straight off
- * disk, so a fetch run is visible immediately with no bucket involved. A static
- * export does not carry the cache, so there it takes an explicit origin — and
- * without one the site renders placeholders rather than thousands of broken
- * <img> tags, which is the right way to fail before the bucket exists.
- */
-export const imagesAvailable = Boolean(configuredImageBase) || !basePath;
-
-/**
- * Origin the images are served from, without a trailing slash.
+ * In development the answer is always yes: `public/images/species/` is served
+ * off disk, so a local fetch run is visible with no bucket involved. In a
+ * deployed environment the cache is not in the repo — it is gitignored, and far
+ * too large to track — so it takes a configured origin, and without one the site
+ * renders placeholders rather than thousands of broken <img> tags.
  *
- * Note `basePath` does not apply automatically: Next rewrites hrefs for
- * `next/link`, but these end up in a raw `<img src>`, so the prefix is added by
- * hand.
+ * This deliberately does not stat the filesystem. Checking for the image
+ * directory made the bundler trace it, which pulled all 21.476 files in as
+ * traced dependencies of the server bundle.
  */
-export const imageBase = configuredImageBase || basePath;
+export const imagesAvailable =
+  usingRemoteImages || process.env.NODE_ENV !== "production";

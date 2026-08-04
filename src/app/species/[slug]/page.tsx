@@ -8,13 +8,27 @@ import { ImageCredit, SpeciesThumb } from "@/components/SpeciesThumb";
 import { StatusBadge } from "@/components/StatusBadge";
 import { iucnClasses, iucnLabel } from "@/lib/iucn";
 import { externalLinks } from "@/lib/links";
-import { allSpecies, familyBySlug, familyNeighbours, speciesBySlug } from "@/lib/species";
+import { familyBySlug, familyNeighbours, speciesBySlug } from "@/lib/species";
 import { t } from "@/lib/strings";
 
 type Params = { slug: string };
 
+/**
+ * Deliberately empty.
+ *
+ * Prerendering all 11.131 species produced 759 MB of HTML and RSC payloads — 68
+ * KB per page to deliver about 1,4 KB of text unique to the bird — which is what
+ * made this site too large for static hosting in the first place. On a server
+ * runtime there is no reason to pay it: `dynamicParams` (on by default) renders
+ * a species page the first time it is asked for and caches the result, so a
+ * popular bird is served from cache and the long tail costs nothing until
+ * somebody actually looks at it.
+ *
+ * Orders and families stay prerendered — there are only 298 of them, and they
+ * are the pages people arrive on.
+ */
 export function generateStaticParams(): Params[] {
-  return allSpecies().map((s) => ({ slug: s.slug }));
+  return [];
 }
 
 export async function generateMetadata({
